@@ -435,13 +435,23 @@ class DownloaderApp:
             kind = settings["kind"]
             extension = (AUDIO_FORMATS if kind == "audio" else VIDEO_FORMATS)[settings["file_format"]]
             quality = settings["quality"]
+            video_format = settings["file_format"] if kind == "video" else ""
             if quality.isdigit():
                 fmt = quality
             elif quality.endswith("p") and quality[:-1].isdigit():
                 height = int(quality[:-1])
-                fmt = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
+                if video_format == "MP4":
+                    fmt = (f"bestvideo[ext=mp4][height<={height}]+bestaudio[ext=m4a]/"
+                          f"best[ext=mp4][height<={height}]")
+                else:
+                    fmt = f"bestvideo[height<={height}]+bestaudio/best[height<={height}]/best"
             elif kind == "video":
-                fmt = "bestvideo*+bestaudio/best"
+                if video_format == "MP4":
+                    # Prefer MP4 video + M4A audio so the selected container is
+                    # honored without relying on yt-dlp's source-container default.
+                    fmt = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]"
+                else:
+                    fmt = "bestvideo*+bestaudio/best"
             else:
                 fmt = "bestaudio/best"
             command += ["--format", fmt, "--output", str(Path(settings["output_dir"]) / "%(title)s.%(ext)s")]
@@ -449,7 +459,9 @@ class DownloaderApp:
                 command += ["--extract-audio", "--audio-format", extension]
                 if quality.endswith(" kbps") and quality[:-5].isdigit():
                     command += ["--audio-quality", quality[:-5]]
-            elif extension != "mp4":
+            elif extension == "mp4":
+                command += ["--merge-output-format", "mp4"]
+            else:
                 command += ["--merge-output-format", extension]
             command += [settings["url"]]
         try:
